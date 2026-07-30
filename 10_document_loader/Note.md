@@ -189,7 +189,9 @@ Most document loaders support two ways of retrieving parsed data:
 ```python
 # Streaming pages of a PDF to process on the fly without RAM spikes
 for page in loader.lazy_load():
-    process_page_text(page.page_content)
+     # Perform your custom processing, such as printing the page content
+    process_page_text(page.page_content)  # any custom processing can be done here.
+    print(page.page_content) # print page by page
 ```
 
 ### Loading Scanned PDFs (OCR)
