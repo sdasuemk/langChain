@@ -176,3 +176,75 @@ docs = loader.load()
 print(docs[0].page_content[:300])
 print(docs[0].metadata)  # Includes page title, source URL, description, etc.
 ```
+
+---
+
+## 5. Advanced Loader Techniques
+
+### Lazy Loading vs Batch Loading
+Most document loaders support two ways of retrieving parsed data:
+1.  **`.load()` (Batch)**: Reads the entire resource, parses it, builds a full Python list of `Document` objects, and returns it. This is straightforward but can saturate system RAM if loading a 1,000-page PDF or thousands of text files simultaneously.
+2.  **`.lazy_load()` (Lazy)**: Returns a Python generator that yields `Document` objects page-by-page or line-by-line. This consumes minimal RAM because only one page/document is kept in active memory at a time.
+
+```python
+# Streaming pages of a PDF to process on the fly without RAM spikes
+for page in loader.lazy_load():
+    process_page_text(page.page_content)
+```
+
+### Loading Scanned PDFs (OCR)
+If a PDF file is scanned (made of image files instead of digital text), standard text extractors will return empty content. 
+To extract text, we configure `PyPDFLoader` to use Optical Character Recognition (OCR):
+*   **Prerequisites**: `pip install rapidocr-onnxruntime pillow`
+*   **Setup**: Use the `extract_images=True` option and supply the `RapidOCRBlobParser`:
+
+```python
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_community.document_loaders.parsers.images import RapidOCRBlobParser
+
+loader = PyPDFLoader(
+    file_path="scanned_document.pdf",
+    extract_images=True,
+    images_parser=RapidOCRBlobParser()
+)
+docs = loader.load() # Extracted text from scanned page images is loaded into page_content
+```
+
+#### Why not UnstructuredPDFLoader?
+`UnstructuredPDFLoader` is a popular alternative that handles layout partitioning and automated OCR (using Tesseract). However:
+*   **Local setup is complex**: It requires installing binary operating system tools (like Tesseract and Poppler utilities) and adding them to the PATH, which is error-prone on Windows.
+*   **Hugging Face / RapidOCR alternative**: Using `PyPDFLoader` with `RapidOCRBlobParser` runs locally in Python without demanding complex system tool configuration.
+
+### Creating a Custom Document Loader
+If you need to ingest data from a unique database, custom API format, or proprietary file type, you can build a custom loader by subclassing `BaseLoader` and overriding `lazy_load()`.
+
+```python
+from typing import Iterator
+from langchain_core.document_loaders import BaseLoader
+from langchain_core.documents import Document
+
+class UserProfileLoader(BaseLoader):
+    def __init__(self, profiles_list: list):
+        self.profiles_list = profiles_list
+
+    def lazy_load(self) -> Iterator[Document]:
+        for profile in self.profiles_list:
+            yield Document(
+                page_content=f"User {profile['name']} works as a {profile['role']}.",
+                metadata={"user_id": profile["id"], "source": "user_api"}
+            )
+```
+
+---
+
+## 6. Directory File Mapping
+
+The examples in this directory illustrate these document loading concepts step-by-step:
+*   [text_loader_1.py](file:///c:/Coding/langChain/10_document_loader/text_loader_1.py): A simple demonstration of loading raw text files using `TextLoader`.
+*   [text_loader_summarizer_chain_2.py](file:///c:/Coding/langChain/10_document_loader/text_loader_summarizer_chain_2.py): Loads a poem using `TextLoader` and summarizes it using an LCEL pipeline and the Hugging Face hosted LLM API.
+*   [scanned_pdf_chat_3.py](file:///c:/Coding/langChain/10_document_loader/scanned_pdf_chat_3.py): An interactive RAG chat session over scanned PDFs using OCR, an `InMemoryVectorStore`, and an LCEL RAG chain.
+*   [simple_loader_example_4.py](file:///c:/Coding/langChain/10_document_loader/simple_loader_example_4.py): Shows side-by-side standard text loading (`TextLoader`) and PDF page loading (`PyPDFLoader`).
+*   [directory_loader_5.py](file:///c:/Coding/langChain/10_document_loader/directory_loader_5.py): Demonstrates concurrent bulk file loading from a directory using `DirectoryLoader`.
+*   [custom_loader_6.py](file:///c:/Coding/langChain/10_document_loader/custom_loader_6.py): Demonstrates how to write your own custom log file parser by inheriting from `BaseLoader`.
+*   [pdf_lazy_loader_7.py](file:///c:/Coding/langChain/10_document_loader/pdf_lazy_loader_7.py): Demonstrates streaming large PDF documents page-by-page to save memory.
+
