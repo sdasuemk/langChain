@@ -1,0 +1,32 @@
+Across the sea of data vast,
+Where prompts are built and queries cast,
+There lies a bridge of modern art,
+Connecting language to its heart:
+**LangChain** weaves the threads of thought,
+To capture wisdom long besought.
+
+With **Document Loaders** leading the way,
+They gather raw files day by day—
+PDFs, webpages, markdown text,
+Preparing all for what comes next.
+They parse the chaos, clean the stream,
+To feed the artificial dream.
+
+Then **Splitters** slice the words with care,
+Creating chunks for search to share.
+Through **Embeddings** turned to math and space,
+Each concept finds its vector place,
+Stored deep within a **Vector DB**,
+For instant, rich retrieval, free.
+
+When questions rise, the **Retriever** knows
+Where hidden understanding grows;
+It fetches context, clear and bright,
+To give the **LLM** its sight.
+No longer guessing in the dark,
+The prompt receives a grounded spark.
+
+From simple chains to complex flows,
+The architecture brightly glowers—
+A framework crafted, smart and grand,
+To put AI's full power in your hand!
