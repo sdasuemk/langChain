@@ -1,0 +1,13 @@
+# Developer IT Troubleshooting Guide
+
+## Section 1: Docker Database Setup
+If the local PostgreSQL database fails to start, verify if container port 5432 is already occupied by a native installation. 
+To resolve this, run `docker-compose down -v` to clear cached volumes, and restart with `docker-compose up -d --build`.
+
+## Section 2: Poetry Dependency Errors
+When experiencing `Poetry SolverProblemError` during `poetry install`, it usually means there is a lockfile conflict.
+Resolution: Delete the `poetry.lock` file and the `.venv` folder, then run `poetry lock --no-update` followed by `poetry install`.
+
+## Section 3: Git SSH Authentication Issues
+If git clone hangs or throws "Permission Denied (publickey)", verify if the ssh-agent is running.
+Run `eval $(ssh-agent -s)` followed by `ssh-add ~/.ssh/id_ed25519` to add your private key.

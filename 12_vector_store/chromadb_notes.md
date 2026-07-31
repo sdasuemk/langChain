@@ -50,7 +50,8 @@ if not os.environ.get("HUGGINGFACEHUB_API_TOKEN"):
 
 # 1. Initialize the API-based embedding model
 embeddings = HuggingFaceEndpointEmbeddings(
-    model="sentence-transformers/all-MiniLM-L6-v2"
+    model="sentence-transformers/all-MiniLM-L6-v2",
+    huggingfacehub_api_token=os.environ.get("HUGGINGFACEHUB_API_TOKEN")
 )
 
 # --- LOCAL ALTERNATIVE (Uncomment to run locally without API keys) ---
