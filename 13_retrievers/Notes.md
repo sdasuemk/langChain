@@ -28,9 +28,52 @@ A Retriever is a component that takes a simple text string (the query) and retur
 3. **Cost & Latency Reduction**: Processing thousands of irrelevant words costs more money (token usage) and takes longer. Retrievers filter out the noise.
 
 ### What is it programmatically?
-In LangChain, a retriever is a standard Runnable class (`BaseRetriever`) that conforms to a simple protocol. It implements:
-- `get_relevant_documents(query: str) -> List[Document]` (Legacy synchronous call)
-- `invoke(input: str) -> List[Document]` (Modern runnable call)
+In LangChain, a retriever inherits from the standard **`BaseRetriever`** class, which in turn inherits from **`Runnable`**. This gives it a uniform interface with two primary entry points:
+- `retriever.invoke(query: str) -> List[Document]` (Modern synchronous entry point)
+- `await retriever.ainvoke(query: str) -> List[Document]` (Asynchronous entry point)
+
+---
+
+### Why are Retrievers Runnables?
+
+In LangChain, the **Runnable** protocol is the foundation of **LCEL (LangChain Expression Language)**. Inheriting from `Runnable` gives retrievers several crucial capabilities:
+
+#### A. Seamless Chain Composition (The Pipe `|` Operator)
+Because retrievers are Runnables, they can be chained directly with prompts, LLMs, and parsers using the `|` operator without requiring custom function calls.
+```python
+# A complete RAG chain composed using LCEL
+rag_chain = (
+    {"context": retriever, "question": RunnablePassthrough()}
+    | prompt
+    | llm
+    | StrOutputParser()
+)
+```
+When you call `rag_chain.invoke("your question")`, LangChain automatically invokes the retriever, passes the resulting documents into the `"context"` variable, and feeds the complete dictionary into the `prompt`.
+
+#### B. Asynchronous and Batch Execution
+In production applications (e.g., FastAPI services), blocking threads for slow database queries is unacceptable. Runnables provide:
+* **Async (`ainvoke`)**: Executes retrieval non-blockingly.
+* **Batching (`batch` / `abatch`)**: Queries multiple inputs concurrently using worker threads.
+  ```python
+  # Runs all queries in parallel, saving time
+  results = retriever.batch(["query 1", "query 2", "query 3"])
+  ```
+
+#### C. Out-of-the-Box Tracing (LangSmith)
+Every step in a Runnable's lifecycle is automatically logged. When you run a retriever inside a chain, LangSmith records:
+* The exact query string.
+* Database execution latency.
+* The exact page content and metadata retrieved.
+
+#### D. Fallbacks and Configuration
+Runnables can easily declare fallbacks in case of API failure:
+```python
+# If the vector store database fails, fall back to Wikipedia search
+robust_retriever = vectorstore_retriever.with_fallbacks([wikipedia_retriever])
+```
+
+---
 
 ### How does it work?
 1. A user asks a question.
@@ -168,6 +211,136 @@ A standard retriever might fetch 10 documents, each containing 500 words. Most o
 
 ---
 
+## 5.5. Maximal Marginal Relevance (MMR) Deep-Dive
+
+### The Core Problem: Semantic Redundancy
+When building search indexes, we break long text files into multiple chunks. 
+If you search for *"How to deploy a FastAPI app on AWS"*, your vector store might find 5 chunks that say:
+1. *"You can deploy FastAPI on AWS using App Runner..."*
+2. *"AWS App Runner is a great way to deploy FastAPI..."*
+3. *"To launch FastAPI on AWS, deploy it with App Runner..."*
+
+If you use standard **Similarity Search (Cosine Similarity)**, the system will fill your LLM prompt context with all 3 of these chunks because they are all mathematically closest to the query. 
+* **The Drawback:** You waste precious context window space and money on redundant text, missing out on chunks about database setup, domain configurations, or security protocols.
+
+---
+
+### The Solution: MMR (The Idea)
+MMR (Maximal Marginal Relevance) is designed to optimize both **relevance** (matching the query) and **diversity** (avoiding repetitive content).
+
+#### The Restaurant Recommendation Analogy:
+Imagine you ask a friend: *"Recommend some good restaurants near Bleecker Street."*
+* **Standard Similarity Search:**
+  1. Joe's Pizza (Pizza)
+  2. John's of Bleecker Street (Pizza)
+  3. Bleecker Street Pizza (Pizza)
+  *Result:* Highly accurate, but completely repetitive. You have no options if you didn't want pizza.
+* **MMR Search:**
+  1. Joe's Pizza (Highest relevance)
+  2. Masa (Sushi) (Highly relevant, but totally different from pizza)
+  3. Shake Shack (Burgers) (Relevant, but different from both pizza and sushi)
+  *Result:* Highly relevant options, but covering a diverse array of tastes.
+
+---
+
+### The Mathematics: How it works
+MMR computes a score for every candidate document and picks the document that maximizes:
+
+$$\text{MMR Score} = \lambda \cdot \text{Sim}_1(d, q) - (1 - \lambda) \cdot \max_{d_j \in S} \text{Sim}_2(d, d_j)$$
+
+Where:
+* $q$ is the **User Query**.
+* $d$ is the **Candidate Document** we are evaluating.
+* $S$ is the set of **Already Selected Documents**.
+* $\text{Sim}_1(d, q)$ is the similarity of the candidate to the query.
+* $\max_{d_j \in S} \text{Sim}_2(d, d_j)$ is the maximum similarity between the candidate and any document we have already selected.
+* $\lambda$ (lambda, usually between $0.0$ and $1.0$) is the **diversity controller**:
+  * **$\lambda = 1.0$**: Pure relevance (Standard Similarity Search).
+  * **$\lambda = 0.0$**: Pure diversity (selects documents that are as different as possible from each other, ignoring similarity to the query).
+  * **$\lambda = 0.5$**: Equal balance.
+
+#### Algorithmic Steps:
+1. Search the vector store to fetch a large initial pool of candidate documents (configured by `fetch_k`, e.g., `fetch_k = 20`).
+2. Add the candidate document with the highest similarity to the query to the **Selected Set**.
+3. For all remaining candidates, calculate their **MMR Score** using the formula.
+4. Select the candidate with the highest MMR Score and add it to the **Selected Set**.
+5. Repeat steps 3 and 4 until the Selected Set contains $K$ documents.
+
+---
+
+## 5.6. Multi-Query Retriever Deep-Dive
+
+### The Core Problem: Query Phrasing Sensitivity
+Vector search evaluates distance in a high-dimensional space. While embedding models are good, they are highly sensitive to specific word selections and sentence structure.
+If a user searches for:
+* *"Python tool for files"*
+
+They might miss a document that says:
+* *"How to open and read a CSV spreadsheet with the python built-in open() utility..."*
+
+Because the user wrote `"tool"` instead of `"utility"`, and `"files"` instead of `"CSV spreadsheet"`, the vector distance might be too large. If the query is poorly written, vague, or short, the retrieval results will be incomplete.
+
+---
+
+### The Solution: Multi-Query (The Idea)
+The Multi-Query Retriever uses a Large Language Model (LLM) to perform **Query Expansion** (generating multiple alternative queries from different perspectives).
+
+#### The Smart Librarian Analogy:
+Imagine you walk into a library and ask the librarian: *"Do you have any books on starting a business?"*
+* **Traditional Retrieval (Literal):** Searches strictly for the keyword *"business"* and misses excellent books titled *"The Startup Guide"* or *"Modern Entrepreneurship"*.
+* **Multi-Query Retrieval:**
+  The librarian translates your query into multiple variations:
+  1. *"books on starting a business"* (Original query)
+  2. *"guide to entrepreneurship"* (Synonym query)
+  3. *"how to launch a startup"* (Alternative perspective query)
+  4. *"business structures for beginners"* (Sub-topic query)
+  
+  The librarian runs **all four searches**, gathers all returned books, removes the duplicates, and hands you the combined stack.
+
+---
+
+### How it works under the hood
+```
+                   ┌───────────────┐
+                   │  User Query   │
+                   └───────┬───────┘
+                           ▼
+                  ┌─────────────────┐
+                  │   LLM Expansion │
+                  └───────┬─────────┘
+                          │ (Generates 3-5 variations)
+        ┌─────────────────┼─────────────────┐
+        ▼                 ▼                 ▼
+  ┌───────────┐     ┌───────────┐     ┌───────────┐
+  │  Query A  │     │  Query B  │     │  Query C  │
+  └─────┬─────┘     └─────┬─────┘     └─────┬─────┘
+        ▼                 ▼                 ▼
+ ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
+ │ Vector Search│   │ Vector Search│   │ Vector Search│
+ └──────┬──────┘   └──────┬──────┘   └──────┬──────┘
+        ▼                 ▼                 ▼
+  ┌───────────┐     ┌───────────┐     ┌───────────┐
+  │  Docs A   │     │  Docs B   │     │  Docs C   │
+  └─────┬─────┘     └─────┬─────┘     └─────┬─────┘
+        │                 │                 │
+        └─────────────────┼─────────────────┘
+                          ▼
+                 ┌─────────────────┐
+                 │  Deduplication  │
+                 └────────┬────────┘
+                          ▼
+             ┌─────────────────────────┐
+             │ Final Unified Doc List  │
+             └─────────────────────────┘
+```
+
+1. **Query Input:** The user submits a query.
+2. **LLM Generation:** LangChain calls a prompt template telling the LLM to write 3-5 alternative versions of the query.
+3. **Parallel Retrieval:** The retriever executes vector search queries for the original query and all generated variations.
+4. **Union & Deduplication:** It takes the union of all returned document lists, deduplicates them (so the same document isn't sent to the LLM multiple times), and outputs a single flat list.
+
+---
+
 ## 6. Basic Python Code Snippets
 
 Here is how you initialize and call common retrievers in LangChain:
@@ -225,3 +398,24 @@ compression_retriever = ContextualCompressionRetriever(
 # This will retrieve 10 docs, re-rank them, and return only the top 3
 docs = compression_retriever.invoke("What is the prompt size limit?")
 ```
+
+### Multi-Query Retriever
+```python
+# Note: In classic LangChain installations, use `langchain_classic.retrievers.multi_query`
+from langchain.retrievers.multi_query import MultiQueryRetriever
+from langchain_openai import ChatOpenAI
+
+# 1. Initialize language model for query expansion
+llm = ChatOpenAI(temperature=0, model="gpt-4o")
+
+# 2. Wrap your vectorstore retriever
+base_retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
+multi_query_retriever = MultiQueryRetriever.from_llm(
+    retriever=base_retriever,
+    llm=llm
+)
+
+# 3. Retrieve relevant documents (will trigger expansion, search, and deduplication)
+docs = multi_query_retriever.invoke("Python file utilities")
+```
+
