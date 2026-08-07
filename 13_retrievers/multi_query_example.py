@@ -101,7 +101,7 @@ def main():
 
     # 4. Create the Multi-Query Retriever
     # Using `from_llm` wraps our base vector store retriever in an LLM query expansion layer.
-    base_retriever = vectorstore.as_retriever(search_kwargs={"k": 1})
+    base_retriever = vectorstore.as_retriever(search_kwargs={"k": 1}) # we can use MMR as well
     multi_query_retriever = MultiQueryRetriever.from_llm(
         retriever=base_retriever,
         llm=mock_llm

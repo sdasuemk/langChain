@@ -341,6 +341,71 @@ Imagine you walk into a library and ask the librarian: *"Do you have any books o
 
 ---
 
+## 5.7. Contextual Compression Retriever Deep-Dive
+
+### The Core Problem: Context Pollution
+Standard vector stores retrieve entire chunks (typically 500 to 1000 words). In most cases, only a single sentence or paragraph within that chunk is actually relevant to the user query.
+If you send the entire chunk to the LLM:
+* **Higher Costs:** You pay for thousands of irrelevant tokens in every generation cycle.
+* **Higher Latency:** Feeding huge context prompts makes the LLM take longer to begin generating answers.
+* **LLM Distraction:** Research shows that LLMs suffer from the **"Lost in the Middle"** phenomenon. If the relevant fact is buried inside a mountain of irrelevant text, the LLM is more likely to miss it and hallucinate.
+
+---
+
+### The Solution: Contextual Compression (The Idea)
+A Contextual Compression Retriever wraps a standard retriever and passes its results through a **Document Compressor** before returning them. The compressor trims, extracts, or filters the documents dynamically based on the search query.
+
+#### The Lease Agreement Analogy:
+Imagine you ask your lawyer: *"Does my lease contract allow pets?"*
+* **Standard Retriever:** Hands you the entire 30-page lease contract. You have to read through pages of utility clauses, deposit limits, and eviction sub-clauses to find the answer.
+* **Contextual Compression Retriever:** The lawyer scans the lease, locates the specific pet sub-clause, extracts the sentence *"Dogs under 25lbs are permitted with a $200 deposit,"* and hands you *only* that sentence. The rest of the document is discarded.
+
+---
+
+### How it works under the hood
+```
+                                 ┌───────────────┐
+                                 │  User Query   │
+                                 └───────┬───────┘
+                                         ▼
+                               ┌───────────────────┐
+                               │  Base Retriever   │ (e.g. Vector Store)
+                               └───────┬───────────┘
+                                       ▼
+                             ┌───────────────────┐
+                             │ Raw Documents     │ (Large 500-word chunks)
+                             └───────┬───────────┘
+                                     ▼
+                           ┌───────────────────┐
+                           │Doc Compressor     │ (LLM / Embeddings Filter / Reranker)
+                           └───────┬───────────┘
+                                   ▼
+                         ┌───────────────────┐
+                         │Compressed Docs    │ (Highly focused 50-word snippets)
+                         └───────┬───────────┘
+                                 ▼
+                         ┌───────────────────┐
+                         │   LLM Prompt      │ (Clean and cost-efficient context)
+                         └───────────────────┘
+```
+
+---
+
+### Types of Document Compressors in LangChain
+1. **LLM Chain Extractor (`LLMChainExtractor`):**
+   * Uses an LLM to read each retrieved document and extract only the sentences matching the query.
+   * *Pros:* Very accurate, extracts exact details.
+   * *Cons:* Slow and expensive (requires an extra LLM call for *every* retrieved document).
+2. **LLM Chain Filter (`LLMChainFilter`):**
+   * Uses an LLM to perform a binary filter (Yes/No) on whether each retrieved document is relevant. Irrelevant documents are discarded entirely.
+3. **Embeddings Filter (`EmbeddingsFilter`):**
+   * Evaluates document chunks using a fast embedding similarity threshold. Documents or sentences that fall below a certain similarity score are dropped.
+   * *Pros:* Fast and cheap (no LLM calls, just vector calculations).
+4. **Re-ranker (e.g., Cohere Rerank, Cross-Encoders):**
+   * Evaluates the candidate documents using a specialized, high-accuracy cross-encoder model, re-sorting the documents and discarding low-scoring matches.
+
+---
+
 ## 6. Basic Python Code Snippets
 
 Here is how you initialize and call common retrievers in LangChain:
