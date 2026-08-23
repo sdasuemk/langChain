@@ -92,7 +92,58 @@ def get_current_weather(location: str) -> str:
 
 ---
 
-## 5. ReAct Agent Reasoning Trace
+## 5. What Makes a LangChain Tool More Than a Normal Function?
+
+A decorated `@tool` object is not just a standard Python function anymore. It is converted into a subclass of LangChain's `BaseTool` class. This gives it several powerful capabilities:
+
+### A. The `.invoke()` Method
+You can invoke a tool directly in Python. It parses the inputs, validates them, and runs the function:
+```python
+# Calling a standard Python function:
+result = get_current_weather("Paris")
+
+# Invoking a LangChain tool:
+result = get_current_weather.invoke({"location": "Paris"})
+```
+> [!NOTE]
+> Unlike calling the function directly where we pass positional or keyword arguments (`"Paris"`), `.invoke()` expects a **dictionary** representing the tool inputs mapping the JSON schema keys.
+
+### B. Automated Schema Generation & Metadata
+LangChain uses the function name, arguments, docstring, and type annotations to automatically build a Pydantic metadata schema. We can extract this metadata programmatically:
+- **`tool.name`**: Returns the tool's string identifier (e.g., `'get_current_weather'`).
+- **`tool.description`**: Returns the docstring description that the LLM reads.
+- **`tool.args`**: Returns a JSON-schema formatted dictionary defining the arguments and their types:
+  ```json
+  {
+    "location": {
+      "title": "Location",
+      "type": "string"
+    }
+  }
+  ```
+- **`tool.args_schema`**: Returns the raw Pydantic model representation of the arguments schema.
+- **`tool.return_direct`**: A boolean (default: `False`). If set to `True`, once this tool is invoked, the agent stops reasoning and immediately returns this tool's raw result to the user.
+
+### C. Automatic Type Validation
+Because of the Pydantic schema integration, calling `.invoke()` with incorrect argument types automatically raises a validation error *before* the function body even executes:
+```python
+# This will raise a ValidationError because 'location' must be a string:
+get_current_weather.invoke({"location": 12345})
+```
+
+### D. The Runnable Interface (LCEL Integration)
+Since `BaseTool` implements the `Runnable` protocol, custom tools support all LCEL piping features:
+- **Batching**: `tool.batch([{"location": "London"}, {"location": "Paris"}])` running multiple invocations.
+- **Async Execution**: `await tool.ainvoke({"location": "London"})` for non-blocking I/O.
+- **Piping (`|`)**: Can be integrated into chain compositions:
+  ```python
+  chain = prompt_template | chat_model | tool
+  ```
+- **Callbacks**: Supports automated callback handlers (e.g., logging execution steps directly to LangSmith).
+
+---
+
+## 6. ReAct Agent Reasoning Trace
 
 We use the standard **ReAct (Reasoning and Acting)** framework loop:
 ```
@@ -117,7 +168,7 @@ Here is a step-by-step example trace for the query:
 
 ---
 
-## 6. Execution & Verification (Custom Tools)
+## 7. Execution & Verification (Custom Tools)
 
 To run the agent equipped with custom tools (RAG + Calculator):
 ```powershell
@@ -127,7 +178,7 @@ This initializes the database, binds the tools to the DeepSeek model, executes t
 
 ---
 
-## 7. Built-in Tools (DuckDuckGo & Wikipedia)
+## 8. Built-in Tools (DuckDuckGo & Wikipedia)
 
 LangChain provides a rich set of **built-in tools** for common tasks like web search, database querying, code execution, and looking up articles.
 
@@ -153,7 +204,7 @@ These tools have their own pre-configured names, descriptions, and logic, making
 
 ---
 
-## 8. Execution & Verification (Built-in Tools)
+## 9. Execution & Verification (Built-in Tools)
 
 To run the agent equipped with both custom RAG and built-in search/Wikipedia tools:
 ```powershell
