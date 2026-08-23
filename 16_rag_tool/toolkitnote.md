@@ -240,3 +240,65 @@ print(result)
 
 In this pipeline, data flows seamlessly from a **built-in toolkit tool** (`read_file`) through custom parsing, and finally into a **custom tool** (`query_video_transcript`), without requiring agent reasoning loops!
 
+---
+
+## 7. Layman Example: A Custom Calculator Toolkit & LCEL Chaining
+
+Here is a super simple, layman-friendly example. We will:
+1. Define two custom calculator tools: one that adds 5, and one that multiplies by 2.
+2. Group them together in a custom `SimpleCalculatorToolkit`.
+3. Extract the tools from the toolkit.
+4. Chain them together in a pipeline using `|` to compute: `(Input + 5) * 2`.
+
+### Complete Layman Script Example
+
+```python
+from typing import List
+from langchain_core.tools import BaseToolkit, BaseTool, tool
+from langchain_core.runnables import RunnableLambda
+
+# Step 1: Define your custom tools
+@tool
+def add_five(x: int) -> int:
+    """Adds 5 to the input number."""
+    return x + 5
+
+@tool
+def multiply_by_two(x: int) -> int:
+    """Multiplies the input number by 2."""
+    return x * 2
+
+
+# Step 2: Group them inside a Custom Toolkit
+class SimpleCalculatorToolkit(BaseToolkit):
+    """A toolkit that groups basic math tools."""
+    
+    def get_tools(self) -> List[BaseTool]:
+        # Returns our custom math tools
+        return [add_five, multiply_by_two]
+
+
+# Step 3: Instantiate toolkit and retrieve tools
+calculator_toolkit = SimpleCalculatorToolkit()
+tools = calculator_toolkit.get_tools()
+
+add_tool = tools[0]       # The add_five tool
+multiply_tool = tools[1]  # The multiply_by_two tool
+
+
+# Step 4: Chain them in a pipeline using |
+# Since add_tool outputs a raw number (e.g. 15), and multiply_tool expects a dictionary 
+# input matching its schema {"x": value}, we place a RunnableLambda in between to format the data.
+math_pipeline = (
+    add_tool 
+    | RunnableLambda(lambda out: {"x": int(out)}) 
+    | multiply_tool
+)
+
+
+# Step 5: Invoke the pipeline chain
+# Goal: Compute (10 + 5) * 2
+result = math_pipeline.invoke({"x": 10})
+print("Result of (10 + 5) * 2 is:", result) # Output: 30
+```
+
