@@ -1,6 +1,6 @@
 # YouTube RAG: LCEL Chaining Tutorial Note
 
-This document explains the concept of **LangChain Expression Language (LCEL)** and details how to orchestrate our YouTube RAG pipeline using declarative pipe (`|`) operators.
+This document explains the concept of **LangChain Expression Language (LCEL)** and details how to orchestrate our YouTube RAG pipeline using declarative pipe (`|`) operators..
 
 ---
 
