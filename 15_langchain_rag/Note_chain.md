@@ -10,14 +10,67 @@ This document explains the concept of **LangChain Expression Language (LCEL)** a
 
 ### The Pipe (`|`) Operator
 LCEL leverages Python's bitwise OR operator `|` to pipe data from one component to another. The output of the left component automatically becomes the input of the right component:
-
 ```
 [Input Data] ──► [Component A] ──(output of A)──► [Component B] ──► [Parsed Output]
 ```
 
+```mermaid
+flowchart TD
+    subgraph Ingestion_Pipeline ["1. Preparation / Ingestion Pipeline"]
+        direction TB
+        url[YouTube Video URL]
+        api[youtube-transcript-api]
+        doc[Full Transcript Document]
+        splitter[RecursiveCharacterTextSplitter]
+        chunks[Document Chunks]
+        embeddings[Embedding Model: sentence-transformers/all-MiniLM-L6-v2]
+        vectordb[(FAISS Vector Database)]
+
+        url --> api
+        api --> doc
+        doc --> splitter
+        splitter --> chunks
+        chunks --> embeddings
+        embeddings -->|Index Chunks| vectordb
+    end
+
+    subgraph LCEL_Execution_Chain ["2. Retrieval, Augmentation, & Generation (LCEL Chain Execution)"]
+        direction TB
+        query([User Query])
+
+        subgraph Parallel_Chain ["parallel_chain (RunnableParallel)"]
+            direction LR
+            retriever[Retriever]
+            format_docs[RunnableLambda format_docs]
+            passthrough[RunnablePassthrough]
+
+            query --> retriever
+            retriever -->|Retrieved Chunks| format_docs
+            query --> passthrough
+        end
+
+        inputs["Inputs Map: {'context', 'question'}"]
+        format_docs -->|context_text| inputs
+        passthrough -->|question| inputs
+
+        prompt[ChatPromptTemplate]
+        llm[ChatHuggingFace: deepseek-ai/DeepSeek-V4-Pro]
+        parser[StrOutputParser]
+        response([Cleaned AI Response String])
+
+        inputs -->|Pipe '| prompt
+        prompt -->|Pipe '| llm
+        llm -->|Pipe '| parser
+        parser -->|Pipe '| response
+    end
+
+    %% Semantic search connection
+    retriever -.->|Semantic Search| vectordb
+```
+
 In code, this is written as:
 ```python
-chain = component_a | component_b
+chain = parallel_chain | prompt_template | chat_model | parser
 ```
 
 ---
