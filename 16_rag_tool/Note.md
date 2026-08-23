@@ -58,7 +58,41 @@ def calculator(expression: str) -> str:
 
 ---
 
-## 4. ReAct Agent Reasoning Trace
+## 4. How to Create Your Own Custom Tool (Step-by-Step)
+
+Creating your own custom tool in LangChain is very straightforward. Follow these steps:
+
+1.  **Import the `@tool` decorator**:
+    ```python
+    from langchain_core.tools import tool
+    ```
+2.  **Define your function and decorate it**: Use the `@tool` decorator above your Python function.
+3.  **Add Type Annotations**: Declare the type of input arguments and the return type.
+4.  **Add a Docstring**: Write a clear description of **what** the tool does and **when** it should be called. The LLM reads this description to decide whether it needs to invoke your tool.
+
+### Simple Code Example (Weather Tool)
+```python
+from langchain_core.tools import tool
+
+@tool
+def get_current_weather(location: str) -> str:
+    """
+    Use this tool to find the current weather temperature and conditions for a specific city location.
+    The input parameter 'location' must be a city name (e.g., 'London' or 'Paris').
+    """
+    # Inside your tool, implement the logic (API calls, database query, etc.)
+    mock_weather_db = {
+        "london": "18°C, Cloudy with light rain.",
+        "paris": "22°C, Sunny and clear skies.",
+        "new york": "25°C, Humid with thunderstorms."
+    }
+    city = location.lower().strip()
+    return mock_weather_db.get(city, f"Could not find weather data for '{location}'.")
+```
+
+---
+
+## 5. ReAct Agent Reasoning Trace
 
 We use the standard **ReAct (Reasoning and Acting)** framework loop:
 ```
@@ -83,7 +117,7 @@ Here is a step-by-step example trace for the query:
 
 ---
 
-## 5. Execution & Verification (Custom Tools)
+## 6. Execution & Verification (Custom Tools)
 
 To run the agent equipped with custom tools (RAG + Calculator):
 ```powershell
@@ -93,7 +127,7 @@ This initializes the database, binds the tools to the DeepSeek model, executes t
 
 ---
 
-## 6. Built-in Tools (DuckDuckGo & Wikipedia)
+## 7. Built-in Tools (DuckDuckGo & Wikipedia)
 
 LangChain provides a rich set of **built-in tools** for common tasks like web search, database querying, code execution, and looking up articles.
 
@@ -119,7 +153,7 @@ These tools have their own pre-configured names, descriptions, and logic, making
 
 ---
 
-## 7. Execution & Verification (Built-in Tools)
+## 8. Execution & Verification (Built-in Tools)
 
 To run the agent equipped with both custom RAG and built-in search/Wikipedia tools:
 ```powershell
