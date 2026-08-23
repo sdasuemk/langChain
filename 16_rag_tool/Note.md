@@ -92,7 +92,76 @@ def get_current_weather(location: str) -> str:
 
 ---
 
-## 5. What Makes a LangChain Tool More Than a Normal Function?
+## 5. Structured Tools & Subclassing `BaseTool`
+
+When an LLM agent uses function calling, it requires a JSON schema representation of the tool arguments. If a tool has multiple arguments, LangChain represents it as a **Structured Tool**.
+
+There are three ways to define structured tools in LangChain:
+
+### Method A: The `@tool` Decorator (Automatic)
+In modern LangChain, decorating any function with multiple arguments using `@tool` automatically generates a structured tool schema:
+```python
+from langchain_core.tools import tool
+
+@tool
+def calculate_area(width: float, height: float) -> float:
+    """Calculates the area of a rectangle given its width and height."""
+    return width * height
+```
+
+### Method B: `StructuredTool.from_function()`
+If you want to create a tool from an existing Python function without modifying it, or want to provide a separate Pydantic model for explicit argument description/validation, use `StructuredTool.from_function()`:
+```python
+from pydantic import BaseModel, Field
+from langchain_core.tools import StructuredTool
+
+# 1. Define the argument schema using Pydantic
+class RectangleInput(BaseModel):
+    width: float = Field(description="The width of the rectangle in meters.")
+    height: float = Field(description="The height of the rectangle in meters.")
+
+# 2. Define the execution function
+def calculate_area_func(width: float, height: float) -> float:
+    return width * height
+
+# 3. Instantiate the StructuredTool
+area_tool = StructuredTool.from_function(
+    func=calculate_area_func,
+    name="calculate_rectangle_area",
+    description="Calculates the area of a rectangle given its dimensions.",
+    args_schema=RectangleInput
+)
+```
+
+### Method C: Subclassing `BaseTool` (Highest Customizability)
+For complex tools requiring internal state initialization (like loading database clients, persistent cache references, or custom credentials), subclassing `BaseTool` is the most robust, class-based approach:
+```python
+from typing import Type
+from pydantic import BaseModel, Field
+from langchain_core.tools import BaseTool
+
+# 1. Define argument schema
+class SearchInput(BaseModel):
+    query: str = Field(description="The search query text.")
+
+# 2. Subclass BaseTool
+class DatabaseSearchTool(BaseTool):
+    name: str = "database_search"
+    description: str = "Queries the internal SQL database for records."
+    args_schema: Type[BaseModel] = SearchInput
+    
+    # Custom fields (not part of the tool inputs schema)
+    db_connection_string: str
+    
+    def _run(self, query: str) -> str:
+        # Tool execution logic runs here (sync)
+        # E.g. db.execute(query)
+        return f"Database query result for '{query}'"
+```
+
+---
+
+## 6. What Makes a LangChain Tool More Than a Normal Function?
 
 A decorated `@tool` object is not just a standard Python function anymore. It is converted into a subclass of LangChain's `BaseTool` class. This gives it several powerful capabilities:
 
@@ -143,7 +212,7 @@ Since `BaseTool` implements the `Runnable` protocol, custom tools support all LC
 
 ---
 
-## 6. ReAct Agent Reasoning Trace
+## 7. ReAct Agent Reasoning Trace
 
 We use the standard **ReAct (Reasoning and Acting)** framework loop:
 ```
@@ -168,7 +237,7 @@ Here is a step-by-step example trace for the query:
 
 ---
 
-## 7. Execution & Verification (Custom Tools)
+## 8. Execution & Verification (Custom Tools)
 
 To run the agent equipped with custom tools (RAG + Calculator):
 ```powershell
@@ -178,7 +247,7 @@ This initializes the database, binds the tools to the DeepSeek model, executes t
 
 ---
 
-## 8. Built-in Tools (DuckDuckGo & Wikipedia)
+## 9. Built-in Tools (DuckDuckGo & Wikipedia)
 
 LangChain provides a rich set of **built-in tools** for common tasks like web search, database querying, code execution, and looking up articles.
 
@@ -204,7 +273,7 @@ These tools have their own pre-configured names, descriptions, and logic, making
 
 ---
 
-## 9. Execution & Verification (Built-in Tools)
+## 10. Execution & Verification (Built-in Tools)
 
 To run the agent equipped with both custom RAG and built-in search/Wikipedia tools:
 ```powershell
