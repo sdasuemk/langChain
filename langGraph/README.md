@@ -207,9 +207,130 @@ Activate your virtual environment and run the lessons:
   * Splitting tools into multiple `ToolNode` instances according to permission or risk level.
   * Setting `ToolNode(..., handle_tool_errors=True)` so exceptions turn into feedback for the agent rather than crashing.
 
+### [11_parallel_tool_calling.py](file:///c:/Coding/langChain/langGraph/11_parallel_tool_calling.py) — Parallel Tool Execution & Recursion Limits
+* **Concepts**:
+  * Handling multiple tool calls emitted in a single turn.
+  * `ToolNode` executing multiple tool calls concurrently.
+  * Protecting agent workflows against runaway loops using `config={"recursion_limit": N}` and catching `GraphRecursionError`.
+
+### [12_dynamic_tool_selection.py](file:///c:/Coding/langChain/langGraph/12_dynamic_tool_selection.py) — Dynamic Tool Selection & RBAC
+* **Concepts**:
+  * Context-aware tool provisioning: filtering available tools based on user roles (Admin vs Guest) or conversation state.
+  * Subclassing `MessagesState` with domain metadata (`user_role`, `authorized_tools`).
+
+### [13_structured_output_agent.py](file:///c:/Coding/langChain/langGraph/13_structured_output_agent.py) — Structured Output via Tool Schemas
+* **Topology**:
+  ```
+                     START
+                       │
+                       ▼
+                 ┌───────────┐
+         ┌──────►│   agent   │ (Research tools, then final submission tool)
+         │       └─────┬─────┘
+         │             │
+         │      [custom_router]
+         │        /    │    \
+         │  (research) │   (final_schema_tool)
+         │      /      │      \
+         │     ▼       │       ▼
+         └── ToolNode  │   extract_structured_data
+                       ▼       │
+                      END      ▼
+                              END
+  ```
+* **Concepts**:
+  * Forcing typed outputs by binding Pydantic models as final submission tools.
+  * Routing dynamically between intermediate helper tools and final schema extraction nodes.
+
 ---
 
-## 5. How to Run All Lessons
+---
+
+## 5. Phase 3: Persistence, Memory & Checkpointers
+
+### [14_in_memory_persistence.py](file:///c:/Coding/langChain/langGraph/14_in_memory_persistence.py) — In-Memory Checkpointing (`MemorySaver`)
+* **Concepts**:
+  * Using `MemorySaver` to checkpoint state after each super-step.
+  * Isolating conversations using `thread_id`: `config={"configurable": {"thread_id": "session_123"}}`.
+  * Passing only NEW messages while LangGraph automatically restores prior conversation context.
+
+### [15_sqlite_disk_persistence.py](file:///c:/Coding/langChain/langGraph/15_sqlite_disk_persistence.py) — SQLite Disk Persistence (`SqliteSaver`)
+* **Concepts**:
+  * Persisting agent state to disk via SQLite (`state_checkpoints.db`).
+  * Surviving process terminations and server restarts: resuming threads across independent runs.
+
+### [16_state_inspection_and_history.py](file:///c:/Coding/langChain/langGraph/16_state_inspection_and_history.py) — State Inspection & History Audit
+* **Concepts**:
+  * Inspecting current state snapshots with `app.get_state(config)`.
+  * Reading checkpoint metadata, scheduled next nodes, and message stacks.
+  * Traversing the complete chronological timeline with `app.get_state_history(config)`.
+
+### [17_time_travel_and_state_editing.py](file:///c:/Coding/langChain/langGraph/17_time_travel_and_state_editing.py) — Time Travel & State Editing
+* **Concepts**:
+  * Editing state manually with `app.update_state(config, values, as_node=...)`.
+  * Time travel: selecting a historical checkpoint ID and forking an alternate conversation timeline.
+
+---
+
+## 6. Phase 4: Human-in-the-Loop (HITL)
+
+### [18_static_breakpoints.py](file:///c:/Coding/langChain/langGraph/18_static_breakpoints.py) — Static Breakpoints (`interrupt_before`)
+* **Concepts**:
+  * Halting graph execution before sensitive nodes with `interrupt_before=[node_name]`.
+  * Inspecting paused status via `app.get_state(config).next`.
+  * Resuming execution by calling `app.invoke(None, config=config)`.
+
+### [19_dynamic_interrupt.py](file:///c:/Coding/langChain/langGraph/19_dynamic_interrupt.py) — Dynamic In-Node Interrupts
+* **Concepts**:
+  * Pausing mid-node using modern `interrupt(payload)` to surface questions or drafts to the human.
+  * Resuming execution and injecting human responses directly back into the node using `Command(resume=value)`.
+
+### [20_action_approval_workflow.py](file:///c:/Coding/langChain/langGraph/20_action_approval_workflow.py) — Full Approval Workflow (Approve/Edit/Reject)
+* **Concepts**:
+  * The 3 core human oversight branches:
+    1. **Approve**: Execute unchanged.
+    2. **Edit**: Modify parameters via `app.update_state()` before allowing execution.
+    3. **Reject**: Abort and route to an escalation/cancellation node.
+
+### [21_tool_call_interception.py](file:///c:/Coding/langChain/langGraph/21_tool_call_interception.py) — Tool Call Interception & Verification
+* **Concepts**:
+  * Segregating safe read-only tools from high-stakes mutation tools.
+  * Pausing execution before `ToolNode` runs for sensitive tool calls.
+  * Modifying tool arguments in-flight prior to resumption.
+
+---
+
+---
+
+## 7. Phase 5: Agentic RAG Patterns
+
+### [22_router_rag.py](file:///c:/Coding/langChain/langGraph/22_router_rag.py) — Router RAG
+* **Concepts**:
+  * Intent-based query classification to direct traffic between Vector DB, Web Search, or Direct LLM answering.
+  * Prevents wasteful vector lookups for general chit-chat and out-of-domain questions.
+
+### [23_corrective_rag.py](file:///c:/Coding/langChain/langGraph/23_corrective_rag.py) — Corrective RAG (CRAG)
+* **Concepts**:
+  * Evaluating document relevance before passing chunks to generation.
+  * Self-correction loop: if retrieved context is poor, the agent rewrites the query and triggers a web search fallback.
+
+### [24_self_rag.py](file:///c:/Coding/langChain/langGraph/24_self_rag.py) — Self-RAG (Reflection Loop)
+* **Concepts**:
+  * Two-tier quality validation:
+    1. **Hallucination Grader**: Ensures response is grounded in retrieved facts.
+    2. **Usefulness Grader**: Verifies response directly answers the question.
+  * Automatic cyclic regeneration if claims contradict the source text.
+
+### [25_adaptive_rag.py](file:///c:/Coding/langChain/langGraph/25_adaptive_rag.py) — Adaptive RAG (Strategy Selection)
+* **Concepts**:
+  * Assessing query complexity dynamically:
+    - **Simple**: Fast direct answer.
+    - **Standard**: Single-hop vector retrieval.
+    - **Complex**: Multi-hop query decomposition with sequential iterative retrieval.
+
+---
+
+## 8. How to Run All Lessons
 
 Activate your virtual environment and run the lessons:
 
@@ -228,9 +349,143 @@ Activate your virtual environment and run the lessons:
 .\.venv\Scripts\python.exe langGraph/08_custom_react_agent.py
 .\.venv\Scripts\python.exe langGraph/09_prebuilt_react_agent.py
 .\.venv\Scripts\python.exe langGraph/10_advanced_tool_routing.py
+.\.venv\Scripts\python.exe langGraph/11_parallel_tool_calling.py
+.\.venv\Scripts\python.exe langGraph/12_dynamic_tool_selection.py
+.\.venv\Scripts\python.exe langGraph/13_structured_output_agent.py
+
+# Phase 3: Persistence, Memory & Checkpointers
+.\.venv\Scripts\python.exe langGraph/14_in_memory_persistence.py
+.\.venv\Scripts\python.exe langGraph/15_sqlite_disk_persistence.py
+.\.venv\Scripts\python.exe langGraph/16_state_inspection_and_history.py
+.\.venv\Scripts\python.exe langGraph/17_time_travel_and_state_editing.py
+
+# Phase 4: Human-in-the-Loop (HITL)
+.\.venv\Scripts\python.exe langGraph/18_static_breakpoints.py
+.\.venv\Scripts\python.exe langGraph/19_dynamic_interrupt.py
+.\.venv\Scripts\python.exe langGraph/20_action_approval_workflow.py
+.\.venv\Scripts\python.exe langGraph/21_tool_call_interception.py
+
+# Phase 5: Agentic RAG Patterns
+.\.venv\Scripts\python.exe langGraph/22_router_rag.py
+.\.venv\Scripts\python.exe langGraph/23_corrective_rag.py
+.\.venv\Scripts\python.exe langGraph/24_self_rag.py
+.\.venv\Scripts\python.exe langGraph/25_adaptive_rag.py
 ```
 
 ---
 
-## Ready for Phase 3?
-Next up is **Phase 3: Persistence, Memory & Checkpointers** (`MemorySaver`, `SqliteSaver`, `thread_id`, state rewind, and multi-user sessions).
+## 8. Phase 6: Multi-Agent Systems & Production
+
+### [26_supervisor_multi_agent.py](file:///c:/Coding/langChain/langGraph/26_supervisor_multi_agent.py) — Supervisor Pattern
+* **Concepts**:
+  * Centralized orchestrator LLM (Supervisor) assessing overall goals and delegating sub-tasks to specialized workers (Researcher, Coder).
+  * Workers complete tasks and report back to the supervisor until `FINISH` is triggered.
+
+### [27_hierarchical_subgraphs.py](file:///c:/Coding/langChain/langGraph/27_hierarchical_subgraphs.py) — Hierarchical Subgraphs
+* **Concepts**:
+  * Nesting compiled graphs as first-class nodes inside parent graphs: `parent_graph.add_node("qa_subsystem", compiled_subgraph)`.
+  * State isolation: encapsulates internal QA pipelines and linting checks away from the parent release management graph.
+
+### [28_swarm_handoffs.py](file:///c:/Coding/langChain/langGraph/28_swarm_handoffs.py) — Swarm / Network Peer Handoffs
+* **Concepts**:
+  * Decentralized peer-to-peer agent handoffs without a central bottleneck.
+  * Triage Agent handing off to Billing, which dynamically escalates multi-hop to Tech Support.
+
+### [29_production_streaming.py](file:///c:/Coding/langChain/langGraph/29_production_streaming.py) — Production Streaming Modes
+* **Concepts**:
+  * `stream_mode="updates"`: Yields step-by-step state diffs produced by each node.
+  * `stream_mode="values"`: Yields full state snapshots after every super-step.
+  * Token-by-token streaming: Streaming real-time token chunks for responsive frontends.
+
+---
+
+---
+
+## 9. Phase 7: Advanced Production Engineering
+
+### [30_map_reduce_send_api.py](file:///c:/Coding/langChain/langGraph/30_map_reduce_send_api.py) — Dynamic Map-Reduce (`Send` API)
+* **Concepts**:
+  * Unlike static parallel branches, the `Send(node, payload)` API dynamically spawns $N$ worker instances at runtime based on task generation.
+  * Automatic fan-in reduction via an `operator.add` reducer list.
+
+### [31_memory_trim_and_summary.py](file:///c:/Coding/langChain/langGraph/31_memory_trim_and_summary.py) — Memory Compaction & Summarization
+* **Concepts**:
+  * Overcoming the context-window overflow problem in long-running persistent threads.
+  * Conditional summarization: condensing older messages into a running `summary` and purging older raw records using `RemoveMessage`.
+
+### [32_cross_thread_memory_store.py](file:///c:/Coding/langChain/langGraph/32_cross_thread_memory_store.py) — Cross-Thread Memory (`Store`)
+* **Concepts**:
+  * Checkpointers preserve state *within* a thread. LangGraph's `Store` (`InMemoryStore`) preserves global user profiles, facts, and preferences *across different threads*.
+  * Hierarchical namespacing: `store.put(("users", user_id), "preferences", {...})`.
+
+### [33_modern_command_control.py](file:///c:/Coding/langChain/langGraph/33_modern_command_control.py) — Modern `Command` Control Flow
+* **Concepts**:
+  * Unifying state updates and edge routing into a single return: `return Command(update={...}, goto="target_node")`.
+  * Eliminates boilerplate conditional edge mapping when decisions are computed directly inside nodes.
+
+### [34_async_graph_execution.py](file:///c:/Coding/langChain/langGraph/34_async_graph_execution.py) — Asynchronous Execution (`ainvoke` / `astream`)
+* **Concepts**:
+  * Writing non-blocking asynchronous graphs with `async def` nodes.
+  * Running concurrent workflows in web environments (FastAPI/Starlette) with `await app.ainvoke(...)` and `async for event in app.astream(...)`.
+
+---
+
+## 10. Complete Master Curriculum (34 Lessons)
+
+Activate your virtual environment and run any lesson:
+
+```powershell
+# In Windows PowerShell:
+# Phase 1: Core Fundamentals & Topologies
+.\.venv\Scripts\python.exe langGraph/01_simple_state_graph.py
+.\.venv\Scripts\python.exe langGraph/02_reducers_and_messages.py
+.\.venv\Scripts\python.exe langGraph/03_llm_state_graph.py
+.\.venv\Scripts\python.exe langGraph/04_serial_graph.py
+.\.venv\Scripts\python.exe langGraph/05_parallel_graph.py
+.\.venv\Scripts\python.exe langGraph/06_conditional_graph.py
+.\.venv\Scripts\python.exe langGraph/07_loop_graph.py
+
+# Phase 2: Tool Calling & Dynamic Routing
+.\.venv\Scripts\python.exe langGraph/08_custom_react_agent.py
+.\.venv\Scripts\python.exe langGraph/09_prebuilt_react_agent.py
+.\.venv\Scripts\python.exe langGraph/10_advanced_tool_routing.py
+.\.venv\Scripts\python.exe langGraph/11_parallel_tool_calling.py
+.\.venv\Scripts\python.exe langGraph/12_dynamic_tool_selection.py
+.\.venv\Scripts\python.exe langGraph/13_structured_output_agent.py
+
+# Phase 3: Persistence, Memory & Checkpointers
+.\.venv\Scripts\python.exe langGraph/14_in_memory_persistence.py
+.\.venv\Scripts\python.exe langGraph/15_sqlite_disk_persistence.py
+.\.venv\Scripts\python.exe langGraph/16_state_inspection_and_history.py
+.\.venv\Scripts\python.exe langGraph/17_time_travel_and_state_editing.py
+
+# Phase 4: Human-in-the-Loop (HITL)
+.\.venv\Scripts\python.exe langGraph/18_static_breakpoints.py
+.\.venv\Scripts\python.exe langGraph/19_dynamic_interrupt.py
+.\.venv\Scripts\python.exe langGraph/20_action_approval_workflow.py
+.\.venv\Scripts\python.exe langGraph/21_tool_call_interception.py
+
+# Phase 5: Agentic RAG Patterns
+.\.venv\Scripts\python.exe langGraph/22_router_rag.py
+.\.venv\Scripts\python.exe langGraph/23_corrective_rag.py
+.\.venv\Scripts\python.exe langGraph/24_self_rag.py
+.\.venv\Scripts\python.exe langGraph/25_adaptive_rag.py
+
+# Phase 6: Multi-Agent Systems & Production
+.\.venv\Scripts\python.exe langGraph/26_supervisor_multi_agent.py
+.\.venv\Scripts\python.exe langGraph/27_hierarchical_subgraphs.py
+.\.venv\Scripts\python.exe langGraph/28_swarm_handoffs.py
+.\.venv\Scripts\python.exe langGraph/29_production_streaming.py
+
+# Phase 7: Advanced Production Engineering
+.\.venv\Scripts\python.exe langGraph/30_map_reduce_send_api.py
+.\.venv\Scripts\python.exe langGraph/31_memory_trim_and_summary.py
+.\.venv\Scripts\python.exe langGraph/32_cross_thread_memory_store.py
+.\.venv\Scripts\python.exe langGraph/33_modern_command_control.py
+.\.venv\Scripts\python.exe langGraph/34_async_graph_execution.py
+```
+
+---
+
+## Congratulations!
+You now possess a complete 34-lesson, 7-phase master curriculum for LangGraph covering state machines, reducers, custom ReAct agents, checkpointer memory, human-in-the-loop approvals, agentic RAG, multi-agent architectures, dynamic map-reduce (`Send`), cross-thread stores, and async production streaming!

@@ -95,11 +95,20 @@ def main():
 
     # --- 3. Create Agent with One Line ---
     # create_react_agent encapsulates the entire graph setup internally
-    app = create_react_agent(
-        model=model,
-        tools=tools,
-        prompt="You are an expert warehouse logistics assistant. Always query inventory tools when asked about stock."
-    )
+    system_prompt = "You are an expert warehouse logistics assistant. Always query inventory tools when asked about stock."
+    try:
+        app = create_react_agent(
+            model=model,
+            tools=tools,
+            prompt=system_prompt
+        )
+    except TypeError:
+        # Fallback for earlier LangGraph versions that used state_modifier parameter
+        app = create_react_agent(
+            model=model,
+            tools=tools,
+            state_modifier=system_prompt
+        )
 
     # --- 4. Invoke the Prebuilt Agent ---
     query = "How many laptops do we currently have in stock?"
