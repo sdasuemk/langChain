@@ -69,18 +69,88 @@ We have created 3 progressive lessons in this directory:
 
 ---
 
-## 3. How to Run Phase 1
+## 3. Core Graph Topologies & Patterns
+
+### [04_serial_graph.py](file:///c:/Coding/langChain/langGraph/04_serial_graph.py) — Linear Pipeline
+* **Topology**: `START -> clean_text -> count_words -> generate_summary -> END`
+* **When to use**: Sequential data pipelines where each step directly relies on the output of the previous step.
+
+### [05_parallel_graph.py](file:///c:/Coding/langChain/langGraph/05_parallel_graph.py) — Fan-Out / Fan-In
+* **Topology**: 
+  ```
+                START
+                  │
+             input_reader
+              ┌───┴───┐
+              ▼       ▼
+          sentiment  keywords  (Concurrent execution)
+              └───┬───┘
+                  ▼
+              aggregator
+                  │
+                 END
+  ```
+* **When to use**: Independent tasks that can execute at the same time. The aggregator automatically waits for all incoming branches (barrier synchronization).
+* **State safety**: Uses `Annotated[List[str], operator.add]` so parallel nodes can append to a shared audit log without collision.
+
+### [06_conditional_graph.py](file:///c:/Coding/langChain/langGraph/06_conditional_graph.py) — Dynamic Routing
+* **Topology**:
+  ```
+                     START
+                       │
+                 classify_ticket
+                       │
+               [routing_decision]  (via add_conditional_edges)
+              ┌────────┼────────┐
+              ▼        ▼        ▼
+           billing  technical  general
+              └────────┼────────┘
+                       │
+                   send_reply
+                       │
+                      END
+  ```
+* **When to use**: Intelligent triage, agent handoffs, or intent-based routing.
+
+### [07_loop_graph.py](file:///c:/Coding/langChain/langGraph/07_loop_graph.py) — Cyclic Execution & Self-Correction
+* **Topology**:
+  ```
+                     START
+                       │
+                 generate_code ◄────────┐ (Loop back with feedback)
+                       │                │
+                   test_code            │
+                       │                │
+               [evaluator_router] ──────┘
+                       │
+                     (pass)
+                       │
+                      END
+  ```
+* **When to use**: Iterative generation (code synthesis, document drafting, self-reflection).
+* **Safety**: State-based iteration guards and LangGraph's `recursion_limit` safeguard against infinite loops.
+
+---
+
+## 4. How to Run
 
 Activate your virtual environment and run the lessons:
 
 ```powershell
 # In Windows PowerShell:
+# 1. Fundamentals
 .\.venv\Scripts\python.exe langGraph/01_simple_state_graph.py
 .\.venv\Scripts\python.exe langGraph/02_reducers_and_messages.py
 .\.venv\Scripts\python.exe langGraph/03_llm_state_graph.py
+
+# 2. Graph Topologies & Patterns
+.\.venv\Scripts\python.exe langGraph/04_serial_graph.py
+.\.venv\Scripts\python.exe langGraph/05_parallel_graph.py
+.\.venv\Scripts\python.exe langGraph/06_conditional_graph.py
+.\.venv\Scripts\python.exe langGraph/07_loop_graph.py
 ```
 
 ---
 
 ## Ready for Phase 2?
-Once you run and review these three scripts, we move to **Phase 2: Conditional Routing & Tools**, where we build a **custom ReAct Agent** with conditional edges (`tools_condition`) and `ToolNode`.
+Once you test and review these topologic patterns, we advance to **Phase 2: Conditional Routing & Tools**, where we construct a **production ReAct Agent** with `ToolNode` and `tools_condition`.
