@@ -152,5 +152,85 @@ Activate your virtual environment and run the lessons:
 
 ---
 
-## Ready for Phase 2?
-Once you test and review these topologic patterns, we advance to **Phase 2: Conditional Routing & Tools**, where we construct a **production ReAct Agent** with `ToolNode` and `tools_condition`.
+---
+
+## 4. Phase 2: Tool Calling & Dynamic Routing
+
+### [08_custom_react_agent.py](file:///c:/Coding/langChain/langGraph/08_custom_react_agent.py) — Custom ReAct Agent from Scratch
+* **Topology**:
+  ```
+                     START
+                       │
+                       ▼
+                 ┌───────────┐
+         ┌──────►│   agent   │
+         │       └─────┬─────┘
+         │             │
+         │     [tools_condition]
+         │        /         \
+         │   (has tools)   (no tools)
+         │      /             \
+         │     ▼               ▼
+         └── ToolNode         END
+  ```
+* **Concepts**:
+  * Using `ToolNode(tools)` from `langgraph.prebuilt`.
+  * Using `tools_condition` for automatic branching based on `AIMessage.tool_calls`.
+  * Cycling tool output back to the agent for final answer synthesis.
+
+### [09_prebuilt_react_agent.py](file:///c:/Coding/langChain/langGraph/09_prebuilt_react_agent.py) — Production Shortcut
+* **Concepts**:
+  * Using `create_react_agent(model, tools, prompt=...)`.
+  * How the prebuilt helper bundles state management, tool binding, and loop edges in one line.
+
+### [10_advanced_tool_routing.py](file:///c:/Coding/langChain/langGraph/10_advanced_tool_routing.py) — Segregated Tools & Error Recovery
+* **Topology**:
+  ```
+                     START
+                       │
+                       ▼
+                     agent
+                       │
+             [route_tools_by_risk]
+            /          │          \
+       (read_tools) (write_tools) (END)
+            │          │            │
+            ▼          ▼            │
+        SafeTools  MutationTools    │
+            │          │            │
+            └──────────┴────────────┘
+                       │
+                       ▼
+                     agent
+  ```
+* **Concepts**:
+  * Splitting tools into multiple `ToolNode` instances according to permission or risk level.
+  * Setting `ToolNode(..., handle_tool_errors=True)` so exceptions turn into feedback for the agent rather than crashing.
+
+---
+
+## 5. How to Run All Lessons
+
+Activate your virtual environment and run the lessons:
+
+```powershell
+# In Windows PowerShell:
+# Phase 1: Core Fundamentals & Patterns
+.\.venv\Scripts\python.exe langGraph/01_simple_state_graph.py
+.\.venv\Scripts\python.exe langGraph/02_reducers_and_messages.py
+.\.venv\Scripts\python.exe langGraph/03_llm_state_graph.py
+.\.venv\Scripts\python.exe langGraph/04_serial_graph.py
+.\.venv\Scripts\python.exe langGraph/05_parallel_graph.py
+.\.venv\Scripts\python.exe langGraph/06_conditional_graph.py
+.\.venv\Scripts\python.exe langGraph/07_loop_graph.py
+
+# Phase 2: Tool Calling & Dynamic Routing
+.\.venv\Scripts\python.exe langGraph/08_custom_react_agent.py
+.\.venv\Scripts\python.exe langGraph/09_prebuilt_react_agent.py
+.\.venv\Scripts\python.exe langGraph/10_advanced_tool_routing.py
+```
+
+---
+
+## Ready for Phase 3?
+Next up is **Phase 3: Persistence, Memory & Checkpointers** (`MemorySaver`, `SqliteSaver`, `thread_id`, state rewind, and multi-user sessions).
