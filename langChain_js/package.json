@@ -1,0 +1,21 @@
+{
+  "name": "langchain-js-mastery",
+  "version": "1.0.0",
+  "description": "LangChain JavaScript & TypeScript Complete Master Curriculum",
+  "type": "module",
+  "main": "01_prompts_and_models.js",
+  "scripts": {
+    "lesson:01": "node 01_prompts_and_models.js",
+    "lesson:02": "node 02_lcel_chains.js",
+    "lesson:03": "node 03_output_parsers.js",
+    "lesson:04": "node 04_document_loaders_and_splitters.js",
+    "lesson:05": "node 05_vectorstores_and_embeddings.js",
+    "lesson:06": "node 06_retrievers_and_rag.js",
+    "lesson:07": "node 07_tool_calling.js"
+  },
+  "dependencies": {
+    "@langchain/core": "^0.3.0",
+    "langchain": "^0.3.0",
+    "zod": "^3.23.8"
+  }
+}
