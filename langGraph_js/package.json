@@ -1,0 +1,21 @@
+{
+  "name": "langgraph-js-mastery",
+  "version": "1.0.0",
+  "description": "LangGraph JavaScript & TypeScript Complete Master Curriculum",
+  "type": "module",
+  "main": "01_simple_state_graph.js",
+  "scripts": {
+    "lesson:01": "node 01_simple_state_graph.js",
+    "lesson:02": "node 02_reducers_and_messages.js",
+    "lesson:03": "node 03_topologies.js",
+    "lesson:04": "node 04_tool_calling_react.js",
+    "lesson:05": "node 05_persistence_and_memory.js",
+    "lesson:06": "node 06_human_in_the_loop.js",
+    "lesson:07": "node 07_agentic_rag.js",
+    "lesson:08": "node 08_multi_agent_supervisor.js"
+  },
+  "dependencies": {
+    "@langchain/core": "^0.3.0",
+    "@langchain/langgraph": "^0.2.20"
+  }
+}
