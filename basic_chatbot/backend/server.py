@@ -1,56 +1,31 @@
-import os
 import json
 import uuid
-from typing import Optional
+import importlib.util
 from pathlib import Path
+from typing import Optional
+
 from dotenv import load_dotenv
-
-# Load .env from project root or current working dir
-env_path = Path(__file__).resolve().parent.parent.parent / ".env"
-load_dotenv(dotenv_path=env_path)
-load_dotenv()
-
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from langchain_core.messages import HumanMessage
 
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
-from langgraph.graph import StateGraph, START, END, add_messages
-from typing import Annotated, TypedDict
-from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
-from langgraph.checkpoint.memory import MemorySaver
+# 1. Load Environment Variables
+env_path = Path(__file__).resolve().parent.parent.parent / ".env"
+load_dotenv(dotenv_path=env_path)
+load_dotenv()
 
-# 1. Initialize HuggingFace Model
-MODEL_NAME = "deepseek-ai/DeepSeek-V4-Pro"
-endpoint = HuggingFaceEndpoint(
-    repo_id=MODEL_NAME,
-    task="text-generation",
-    max_new_tokens=512,
-    temperature=0.7,
-)
-llm = ChatHuggingFace(llm=endpoint)
+# 2. Import the LangGraph Compiled App from the separate graph file (35_basic_chatbot.py)
+GRAPH_FILE = Path(__file__).resolve().parent / "35_basic_chatbot.py"
+spec = importlib.util.spec_from_file_location("chatbot_graph", GRAPH_FILE)
+graph_module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(graph_module)
 
-# 2. Define State
-class ChatState(TypedDict):
-    messages: Annotated[list[BaseMessage], add_messages]
+app_graph = graph_module.app
+MODEL_NAME = getattr(graph_module.endpoint, "repo_id", "deepseek-ai/DeepSeek-V4-Pro")
 
-# 3. Node Logic
-def chatbot_node(state: ChatState) -> dict:
-    messages = state["messages"]
-    response = llm.invoke(messages)
-    return {"messages": [response]}
-
-# 4. Checkpointer & Graph Compilation
-checkpoint_saver = MemorySaver()
-graph_builder = StateGraph(ChatState)
-graph_builder.add_node("chatbot", chatbot_node)
-graph_builder.add_edge(START, "chatbot")
-graph_builder.add_edge("chatbot", END)
-
-app_graph = graph_builder.compile(checkpointer=checkpoint_saver)
-
-# 5. FastAPI Application
+# 3. FastAPI Application
 app = FastAPI(title="LangGraph HuggingFace Chatbot API", version="1.0.0")
 
 app.add_middleware(
@@ -70,7 +45,8 @@ def health_check():
     return {
         "status": "healthy",
         "model": MODEL_NAME,
-        "default_thread": "default_thread"
+        "default_thread": "default_thread",
+        "graph_source": str(GRAPH_FILE.name),
     }
 
 @app.get("/api/history/{thread_id}")
@@ -86,7 +62,6 @@ def get_history(thread_id: str):
 
 @app.delete("/api/history/{thread_id}")
 def clear_history(thread_id: str):
-    # Simply create a new thread or reset
     return {"status": "cleared", "thread_id": thread_id}
 
 @app.post("/api/chat")
@@ -100,13 +75,14 @@ async def chat_endpoint(req: ChatRequest):
     config = {"configurable": {"thread_id": thread_id}}
 
     def event_generator():
-        # First send thinking event so frontend shows thinking animation immediately
+        # 1. Immediate thinking event for client UI animation
         yield f"data: {json.dumps({'type': 'thinking', 'status': 'Thinking...'})}\n\n"
 
         full_response = ""
         first_token = True
 
         try:
+            # Stream tokens directly from the imported LangGraph instance
             events = app_graph.stream(
                 {"messages": [HumanMessage(content=user_text)]},
                 stream_mode="messages",

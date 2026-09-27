@@ -53,8 +53,8 @@ sequenceDiagram
 ```
 basic_chatbot/
 ├── backend/
-│   ├── 35_basic_chatbot.py   # Interactive CLI test script
-│   └── server.py             # FastAPI async streaming server (Port 8000)
+│   ├── 35_basic_chatbot.py   # Standalone LangGraph StateGraph & CLI runner (Source of Truth)
+│   └── server.py             # Lightweight FastAPI SSE server (imports graph from 35_basic_chatbot.py)
 ├── frontend/
 │   ├── src/
 │   │   ├── App.jsx           # Main React chatbot component
@@ -182,7 +182,29 @@ Before the first token arrives from the LLM endpoint (which can take 1–3 secon
 
 ## 5. FastAPI Server & SSE Protocol
 
-### 5.1 Server-Sent Events (SSE) Format
+### 5.1 Graph Reusability & Zero Duplication
+Rather than rewriting the LangGraph state machine, nodes, model configuration, and checkpointer, `server.py` cleanly imports the compiled `app` directly from `35_basic_chatbot.py`:
+
+```python
+import importlib.util
+from pathlib import Path
+
+# Load compiled LangGraph app directly from the separate graph file
+GRAPH_FILE = Path(__file__).resolve().parent / "35_basic_chatbot.py"
+spec = importlib.util.spec_from_file_location("chatbot_graph", GRAPH_FILE)
+graph_module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(graph_module)
+
+# Extract compiled graph & model info without duplicating state or node code
+app_graph = graph_module.app
+MODEL_NAME = getattr(graph_module.endpoint, "repo_id", "deepseek-ai/DeepSeek-V4-Pro")
+```
+
+**Benefits:**
+- **Single Source of Truth**: Modifying nodes, prompts, or model parameters in [35_basic_chatbot.py](file:///c:/Coding/langChain/basic_chatbot/backend/35_basic_chatbot.py) automatically updates both the CLI runner and the FastAPI web server.
+- **Clean Separation of Concerns**: `server.py` focuses purely on HTTP routing, CORS, and Server-Sent Events (SSE), while `35_basic_chatbot.py` encapsulates AI orchestration.
+
+### 5.2 Server-Sent Events (SSE) Format
 The endpoint `/api/chat` streams data compliant with the SSE standard:
 
 | Event Type | Payload Example | Purpose |
