@@ -200,9 +200,48 @@ app_graph = graph_module.app
 MODEL_NAME = getattr(graph_module.endpoint, "repo_id", "deepseek-ai/DeepSeek-V4-Pro")
 ```
 
-**Benefits:**
-- **Single Source of Truth**: Modifying nodes, prompts, or model parameters in [35_basic_chatbot.py](file:///c:/Coding/langChain/basic_chatbot/backend/35_basic_chatbot.py) automatically updates both the CLI runner and the FastAPI web server.
-- **Clean Separation of Concerns**: `server.py` focuses purely on HTTP routing, CORS, and Server-Sent Events (SSE), while `35_basic_chatbot.py` encapsulates AI orchestration.
+#### Line-by-Line Breakdown:
+
+1. **`import importlib.util`**
+   - Imports Python's built-in `importlib.util` module, which provides low-level utilities to programmatically load, compile, and execute Python source files dynamically at runtime.
+
+2. **`from pathlib import Path`**
+   - Imports Python's modern filesystem path handling class. It provides clean, cross-platform path resolution that works seamlessly across Windows, macOS, and Linux without worrying about backslashes vs. forward slashes.
+
+3. **`GRAPH_FILE = Path(__file__).resolve().parent / "35_basic_chatbot.py"`**
+   - `__file__`: Returns the filepath of the executing script (`server.py`).
+   - `.resolve()`: Resolves any symlinks and relative references into a canonical, absolute filesystem path.
+   - `.parent`: Traverses up one level to the `backend/` directory.
+   - `/ "35_basic_chatbot.py"`: Appends the filename using `Path`'s division operator, creating an exact, reliable absolute path to the graph file regardless of the terminal's working directory.
+
+4. **`spec = importlib.util.spec_from_file_location("chatbot_graph", GRAPH_FILE)`**
+   - Creates a `ModuleSpec` (module specification) object containing the metadata required by Python's import system.
+   - **Why this is critical**: Standard Python syntax forbids importing files whose names begin with numbers (e.g. `import 35_basic_chatbot` causes a `SyntaxError`). `spec_from_file_location` bypasses this rule by binding an internal identifier (`"chatbot_graph"`) to the physical file location.
+
+5. **`graph_module = importlib.util.module_from_spec(spec)`**
+   - Creates a new, blank module object in memory based on the specification created above.
+
+6. **`spec.loader.exec_module(graph_module)`**
+   - Runs the code inside `35_basic_chatbot.py` in the module's namespace.
+   - This executes the top-level definitions: initializing `endpoint`, `llm`, defining `ChatState`, creating nodes, and compiling `app = graph_builder.compile(...)`.
+   - **Crucial**: The interactive CLI `while` loop at the bottom of `35_basic_chatbot.py` does **not** execute because it is guarded by `if __name__ == "__main__":` (when loaded by `exec_module`, `__name__` is `"chatbot_graph"`, not `"__main__"`).
+
+7. **`app_graph = graph_module.app`**
+   - Extracts the already-compiled `CompiledStateGraph` object (`app`) from `graph_module` and binds it locally as `app_graph`.
+   - `server.py` can now call `app_graph.stream()` directly to run inference, without defining a single graph node or reducer.
+
+8. **`MODEL_NAME = getattr(graph_module.endpoint, "repo_id", "deepseek-ai/DeepSeek-V4-Pro")`**
+   - Uses `getattr()` to dynamically read the model identifier (`"deepseek-ai/DeepSeek-V4-Pro"`) from the `endpoint` initialized inside `35_basic_chatbot.py`.
+   - If the attribute does not exist, it falls back safely to the default string `"deepseek-ai/DeepSeek-V4-Pro"`.
+
+---
+
+**Benefits of this approach:**
+- **Single Source of Truth**: Modifying nodes, prompts, temperature, or model parameters in [35_basic_chatbot.py](file:///c:/Coding/langChain/basic_chatbot/backend/35_basic_chatbot.py) automatically updates both the CLI runner and the FastAPI web server.
+- **Zero Code Duplication**: Eliminates over 50 lines of duplicate state and node setup in `server.py`.
+- **Clean Separation of Concerns**: `server.py` handles HTTP routing, CORS, and Server-Sent Events (SSE), while `35_basic_chatbot.py` manages AI orchestration.
+
+---
 
 ### 5.2 Server-Sent Events (SSE) Format
 The endpoint `/api/chat` streams data compliant with the SSE standard:
@@ -215,7 +254,7 @@ The endpoint `/api/chat` streams data compliant with the SSE standard:
 | `done` | `{"type": "done", "full_response": "...", "thread_id": "..."}` | Signals end of generation |
 | `error` | `{"type": "error", "error": "Details..."}` | Reports runtime or API errors |
 
-### 5.2 CORS Configuration
+### 5.3 CORS Configuration
 The server enables Cross-Origin Resource Sharing (CORS) so Vite running on `http://localhost:5173` can communicate with FastAPI on `http://localhost:8000`:
 ```python
 app.add_middleware(
